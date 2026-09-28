@@ -48,8 +48,12 @@ export interface UserVoteRecord {
 }
 
 export interface QuestionSuggestion {
+  id?: string;
   question: string;
   optionA: string;
   optionB: string;
   author: string;
+  votes?: number;
+  status?: 'pending' | 'approved';
+  createdAt?: string;
 }

@@ -6,7 +6,7 @@ import { Header } from './components/Header';
 import { PollModal } from './components/PollModal';
 import { SuggestionModal } from './components/SuggestionModal';
 import { ProfileModal } from './components/ProfileModal';
-import { CheckCircle2, ChevronRight, BarChart3, HelpCircle } from 'lucide-react';
+import { CheckCircle2, ChevronRight, Sparkles } from 'lucide-react';
 
 export const App: React.FC = () => {
   const [polls, setPolls] = useState<Poll[]>([]);
@@ -78,61 +78,84 @@ export const App: React.FC = () => {
         </div>
 
         {/* Channel Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {filteredPolls.map((poll) => {
-            const hasVoted = Boolean(poll.userVote);
-            return (
-              <div
-                key={poll.id}
-                onClick={() => {
-                  sounds.playSelect();
-                  setSelectedPoll(poll);
-                }}
-                onMouseEnter={() => sounds.playHover()}
-                className="wii-tile rounded-3xl p-6 cursor-pointer flex flex-col justify-between group relative overflow-hidden"
-              >
-                {/* Channel Top Badge */}
-                <div className="flex justify-between items-center mb-4">
-                  <span className="text-[11px] font-black uppercase tracking-wider px-3 py-1 rounded-full bg-slate-100 text-slate-600 border border-slate-200">
-                    {poll.category}
-                  </span>
-                  <div className="flex items-center gap-2">
-                    {hasVoted && (
-                      <span className="text-xs font-bold text-emerald-600 flex items-center gap-1 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
-                        <CheckCircle2 className="w-3.5 h-3.5" /> Voted
+        {filteredPolls.length === 0 ? (
+          <div className="text-center py-16 bg-white/70 backdrop-blur-sm rounded-3xl border-2 border-slate-200 shadow-sm p-8">
+            <div className="text-4xl mb-3">📡</div>
+            <h3 className="text-xl font-black text-slate-800">No Active Broadcasts</h3>
+            <p className="text-sm font-semibold text-slate-500 mt-1 max-w-md mx-auto">
+              {isLiveBackend
+                ? 'No broadcasts found on Back4App yet. Vote on community suggestions or suggest a question to launch the first poll!'
+                : 'No polls match the current filter.'}
+            </p>
+            <button
+              onClick={() => {
+                sounds.playSelect();
+                setIsSuggestOpen(true);
+              }}
+              className="mt-5 wii-btn px-6 py-2.5 rounded-full text-wii-blue font-black text-xs inline-flex items-center gap-2"
+            >
+              <Sparkles className="w-4 h-4" /> Open Suggestion Box & Vote
+            </button>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {filteredPolls.map((poll) => {
+              const hasVoted = Boolean(poll.userVote);
+              return (
+                <div
+                  key={poll.id}
+                  onClick={() => {
+                    sounds.playSelect();
+                    setSelectedPoll(poll);
+                  }}
+                  onMouseEnter={() => sounds.playHover()}
+                  className="wii-tile rounded-3xl p-6 cursor-pointer flex flex-col justify-between group relative overflow-hidden"
+                >
+                  {/* Channel Top Badge */}
+                  <div className="flex justify-between items-center mb-4">
+                    <span className="text-[11px] font-black uppercase tracking-wider px-3 py-1 rounded-full bg-slate-100 text-slate-600 border border-slate-200">
+                      {poll.category}
+                    </span>
+                    <div className="flex items-center gap-2">
+                      {hasVoted && (
+                        <span className="text-xs font-bold text-emerald-600 flex items-center gap-1 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                          <CheckCircle2 className="w-3.5 h-3.5" /> Voted
+                        </span>
+                      )}
+                      <span className="text-xs font-semibold text-slate-400">
+                        {poll.expiresAt}
                       </span>
-                    )}
-                    <span className="text-xs font-semibold text-slate-400">{poll.expiresAt}</span>
+                    </div>
+                  </div>
+
+                  {/* Title */}
+                  <h3 className="text-xl font-black text-slate-800 group-hover:text-wii-blue transition-colors mb-6 leading-snug">
+                    {poll.title}
+                  </h3>
+
+                  {/* Choice Preview Cards */}
+                  <div className="grid grid-cols-2 gap-3 mb-4">
+                    <div className="bg-slate-100/90 rounded-2xl p-3 text-center border border-slate-200 font-extrabold text-sm text-slate-700">
+                      {poll.optionA.text}
+                    </div>
+                    <div className="bg-slate-100/90 rounded-2xl p-3 text-center border border-slate-200 font-extrabold text-sm text-slate-700">
+                      {poll.optionB.text}
+                    </div>
+                  </div>
+
+                  {/* Footer Action */}
+                  <div className="flex justify-between items-center pt-2 border-t border-slate-200/60 text-xs font-bold text-slate-500">
+                    <span>{poll.totalVotes.toLocaleString()} votes cast</span>
+                    <span className="text-wii-blue flex items-center gap-1 group-hover:translate-x-1 transition-transform">
+                      {hasVoted ? 'View Results' : 'Vote Now'}{' '}
+                      <ChevronRight className="w-4 h-4" />
+                    </span>
                   </div>
                 </div>
-
-                {/* Title */}
-                <h3 className="text-xl font-black text-slate-800 group-hover:text-wii-blue transition-colors mb-6 leading-snug">
-                  {poll.title}
-                </h3>
-
-                {/* Choice Preview Cards */}
-                <div className="grid grid-cols-2 gap-3 mb-4">
-                  <div className="bg-slate-100/90 rounded-2xl p-3 text-center border border-slate-200 font-extrabold text-sm text-slate-700">
-                    {poll.optionA.text}
-                  </div>
-                  <div className="bg-slate-100/90 rounded-2xl p-3 text-center border border-slate-200 font-extrabold text-sm text-slate-700">
-                    {poll.optionB.text}
-                  </div>
-                </div>
-
-                {/* Footer Action */}
-                <div className="flex justify-between items-center pt-2 border-t border-slate-200/60 text-xs font-bold text-slate-500">
-                  <span>{poll.totalVotes.toLocaleString()} votes cast</span>
-                  <span className="text-wii-blue flex items-center gap-1 group-hover:translate-x-1 transition-transform">
-                    {hasVoted ? 'View Results' : 'Vote Now'}{' '}
-                    <ChevronRight className="w-4 h-4" />
-                  </span>
-                </div>
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
+        )}
       </main>
 
       {/* Wii Bottom Navigation Bar */}
@@ -161,6 +184,9 @@ export const App: React.FC = () => {
         <SuggestionModal
           onClose={() => setIsSuggestOpen(false)}
           defaultNickname={profile.isRegistered ? profile.nickname : ''}
+          onPollCreated={(newPoll) => {
+            setPolls((prev) => [newPoll, ...prev.filter((p) => p.id !== newPoll.id)]);
+          }}
         />
       )}
 

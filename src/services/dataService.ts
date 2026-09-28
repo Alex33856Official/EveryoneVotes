@@ -195,32 +195,51 @@ export const dataService = {
       try {
         const PollClass = Parse.Object.extend('Poll');
         const query = new Parse.Query(PollClass);
+        query.descending('createdAt');
         const results = await query.find();
-        if (results.length > 0) {
-          return results.map((item) => ({
+
+        const userVotes = await this.getUserVotes();
+        const votesByPollId = new Map(userVotes.map((v) => [v.pollId, v]));
+
+        return results.map((item) => {
+          const voteRecord = votesByPollId.get(item.id);
+          const expiresAtVal = item.get('expiresAt');
+          let expiresAtStr = 'Active';
+          if (expiresAtVal) {
+            const diffDays = Math.ceil(
+              (new Date(expiresAtVal).getTime() - Date.now()) / (1000 * 60 * 60 * 24)
+            );
+            expiresAtStr = diffDays > 0 ? `${diffDays} days left` : 'Closed';
+          }
+
+          return {
             id: item.id,
-            title: item.get('title'),
-            category: item.get('category') || 'Daily',
+            title: item.get('title') || 'Untitled Poll',
+            category: item.get('category') || 'Community',
             status: item.get('status') || 'voting',
-            expiresAt: item.get('expiresAt') ? new Date(item.get('expiresAt')).toLocaleDateString() : 'Soon',
+            expiresAt: expiresAtStr,
             totalVotes: (item.get('votesCountA') || 0) + (item.get('votesCountB') || 0),
             optionA: {
-              text: item.get('optionA'),
+              text: item.get('optionA') || 'Option A',
               votes: item.get('votesCountA') || 0,
               predictions: item.get('predictionsCountA') || 0,
             },
             optionB: {
-              text: item.get('optionB'),
+              text: item.get('optionB') || 'Option B',
               votes: item.get('votesCountB') || 0,
               predictions: item.get('predictionsCountB') || 0,
             },
-          }));
-        }
+            userVote: voteRecord?.selectedOption,
+            userPrediction: voteRecord?.predictedOption,
+          };
+        });
       } catch (err) {
-        console.warn('Back4App query failed, falling back to local storage:', err);
+        console.warn('Back4App poll query failed:', err);
+        return [];
       }
     }
 
+    // Demo Mode only: Local storage & default seed polls
     const saved = localStorage.getItem(STORAGE_KEY);
     if (!saved) {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(DEFAULT_POLLS));
@@ -397,6 +416,35 @@ export const dataService = {
     return initialVotes;
   },
 
+  async getSuggestions(): Promise<QuestionSuggestion[]> {
+    if (isLiveBackend) {
+      try {
+        const SuggestionClass = Parse.Object.extend('Suggestion');
+        const query = new Parse.Query(SuggestionClass);
+        query.equalTo('status', 'pending');
+        query.descending('createdAt');
+        const results = await query.find();
+        return results.map((obj) => ({
+          id: obj.id,
+          question: obj.get('question'),
+          optionA: obj.get('optionA'),
+          optionB: obj.get('optionB'),
+          author: obj.get('authorName') || 'Anonymous Mii',
+          votes: obj.get('votes') || 0,
+          status: obj.get('status') || 'pending',
+          createdAt: obj.createdAt
+            ? new Date(obj.createdAt).toLocaleDateString([], { month: 'short', day: 'numeric' })
+            : 'Recently',
+        }));
+      } catch (err) {
+        console.warn('Failed to query suggestions from Back4App:', err);
+      }
+    }
+
+    const list: QuestionSuggestion[] = JSON.parse(localStorage.getItem('evc_suggestions') || '[]');
+    return list.filter((s) => s.status !== 'approved');
+  },
+
   async submitSuggestion(suggestion: QuestionSuggestion): Promise<void> {
     if (isLiveBackend) {
       try {
@@ -406,6 +454,7 @@ export const dataService = {
         obj.set('optionA', suggestion.optionA);
         obj.set('optionB', suggestion.optionB);
         obj.set('authorName', suggestion.author);
+        obj.set('votes', 0);
         obj.set('status', 'pending');
         await obj.save();
         return;
@@ -413,9 +462,102 @@ export const dataService = {
         console.warn('Failed to push suggestion to Back4App:', err);
       }
     }
+
     // Local fallback
-    const list = JSON.parse(localStorage.getItem('evc_suggestions') || '[]');
-    list.push({ ...suggestion, date: new Date().toISOString() });
+    const list: QuestionSuggestion[] = JSON.parse(localStorage.getItem('evc_suggestions') || '[]');
+    list.unshift({
+      ...suggestion,
+      id: 'sugg-' + Date.now(),
+      votes: 0,
+      status: 'pending',
+      createdAt: 'Just now',
+    });
     localStorage.setItem('evc_suggestions', JSON.stringify(list));
-  }
+  },
+
+  async voteAcceptSuggestion(suggestionId: string): Promise<{ accepted: boolean; newPoll?: Poll }> {
+    if (isLiveBackend) {
+      try {
+        const SuggestionClass = Parse.Object.extend('Suggestion');
+        const query = new Parse.Query(SuggestionClass);
+        const suggestionObj = await query.get(suggestionId);
+
+        suggestionObj.increment('votes', 1);
+        const currentVotes = (suggestionObj.get('votes') || 0) + 1;
+
+        let newPoll: Poll | undefined;
+
+        // 1 vote = accepted
+        if (currentVotes >= 1) {
+          suggestionObj.set('status', 'approved');
+          await suggestionObj.save();
+
+          const PollClass = Parse.Object.extend('Poll');
+          const poll = new PollClass();
+          const question = suggestionObj.get('question');
+          const optionA = suggestionObj.get('optionA');
+          const optionB = suggestionObj.get('optionB');
+          const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
+
+          poll.set('title', question);
+          poll.set('optionA', optionA);
+          poll.set('optionB', optionB);
+          poll.set('category', 'Community');
+          poll.set('status', 'voting');
+          poll.set('votesCountA', 0);
+          poll.set('votesCountB', 0);
+          poll.set('predictionsCountA', 0);
+          poll.set('predictionsCountB', 0);
+          poll.set('expiresAt', expiresAt);
+
+          const savedPoll = await poll.save();
+          newPoll = {
+            id: savedPoll.id,
+            title: question,
+            category: 'Community',
+            status: 'voting',
+            expiresAt: '7 days left',
+            totalVotes: 0,
+            optionA: { text: optionA, votes: 0, predictions: 0 },
+            optionB: { text: optionB, votes: 0, predictions: 0 },
+          };
+        } else {
+          await suggestionObj.save();
+        }
+
+        return { accepted: true, newPoll };
+      } catch (err) {
+        console.warn('Failed to vote accept suggestion on Back4App:', err);
+        throw err;
+      }
+    }
+
+    // Local / Demo mode fallback
+    const list: QuestionSuggestion[] = JSON.parse(localStorage.getItem('evc_suggestions') || '[]');
+    const targetIdx = list.findIndex((s) => s.id === suggestionId);
+    let newPoll: Poll | undefined;
+
+    if (targetIdx !== -1) {
+      list[targetIdx].votes = (list[targetIdx].votes || 0) + 1;
+      list[targetIdx].status = 'approved';
+      localStorage.setItem('evc_suggestions', JSON.stringify(list));
+
+      newPoll = {
+        id: 'poll-community-' + Date.now(),
+        title: list[targetIdx].question,
+        category: 'Community',
+        status: 'voting',
+        expiresAt: '7 days left',
+        totalVotes: 0,
+        optionA: { text: list[targetIdx].optionA, votes: 0, predictions: 0 },
+        optionB: { text: list[targetIdx].optionB, votes: 0, predictions: 0 },
+      };
+
+      const polls = await this.getPolls();
+      polls.unshift(newPoll);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(polls));
+    }
+
+    return { accepted: true, newPoll };
+  },
 };
