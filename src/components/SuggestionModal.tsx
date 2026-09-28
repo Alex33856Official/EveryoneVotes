@@ -5,13 +5,17 @@ import { dataService } from '../services/dataService';
 
 interface SuggestionModalProps {
   onClose: () => void;
+  defaultNickname?: string;
 }
 
-export const SuggestionModal: React.FC<SuggestionModalProps> = ({ onClose }) => {
+export const SuggestionModal: React.FC<SuggestionModalProps> = ({
+  onClose,
+  defaultNickname = '',
+}) => {
   const [question, setQuestion] = useState('');
   const [optionA, setOptionA] = useState('');
   const [optionB, setOptionB] = useState('');
-  const [author, setAuthor] = useState('');
+  const [author, setAuthor] = useState(defaultNickname);
   const [submitted, setSubmitted] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {

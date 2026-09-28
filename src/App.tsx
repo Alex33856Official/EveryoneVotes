@@ -157,7 +157,12 @@ export const App: React.FC = () => {
         />
       )}
 
-      {isSuggestOpen && <SuggestionModal onClose={() => setIsSuggestOpen(false)} />}
+      {isSuggestOpen && (
+        <SuggestionModal
+          onClose={() => setIsSuggestOpen(false)}
+          defaultNickname={profile.isRegistered ? profile.nickname : ''}
+        />
+      )}
 
       {isProfileOpen && (
         <ProfileModal
