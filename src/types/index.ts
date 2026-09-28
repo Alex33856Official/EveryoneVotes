@@ -1,7 +1,7 @@
 export interface Poll {
   id: string;
   title: string;
-  category: 'Daily' | 'Worldwide' | 'Casual';
+  category: 'Daily' | 'Worldwide' | 'Casual' | 'Community';
   optionA: {
     text: string;
     icon?: string;

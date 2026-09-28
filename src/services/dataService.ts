@@ -6,7 +6,8 @@ const JS_KEY = import.meta.env.VITE_BACK4APP_JS_KEY;
 
 export const isLiveBackend = Boolean(APP_ID && JS_KEY);
 
-if (isLiveBackend) {
+// Have to check again so TypeScript can be certain of the types
+if (APP_ID && JS_KEY) {
   Parse.initialize(APP_ID, JS_KEY);
   Parse.serverURL = 'https://parseapi.back4app.com';
 }
@@ -67,7 +68,7 @@ export const dataService = {
         const currentUser = Parse.User.current();
         if (currentUser) {
           const profile: UserProfile = {
-            id: currentUser.id,
+            id: currentUser.id || '',
             username: currentUser.get('username'),
             nickname: currentUser.get('nickname') || currentUser.get('username'),
             color: currentUser.get('color') || '#1ea4ec',
@@ -119,7 +120,7 @@ export const dataService = {
 
       const createdUser = await user.signUp();
       const profile: UserProfile = {
-        id: createdUser.id,
+        id: createdUser.id || '',
         username: createdUser.get('username'),
         nickname: createdUser.get('nickname') || finalNick,
         color: createdUser.get('color') || finalColor,
@@ -147,7 +148,7 @@ export const dataService = {
     if (isLiveBackend) {
       const user = await Parse.User.logIn(username, password);
       const profile: UserProfile = {
-        id: user.id,
+        id: user.id || '',
         username: user.get('username'),
         nickname: user.get('nickname') || user.get('username'),
         color: user.get('color') || '#1ea4ec',
@@ -202,7 +203,8 @@ export const dataService = {
         const votesByPollId = new Map(userVotes.map((v) => [v.pollId, v]));
 
         return results.map((item) => {
-          const voteRecord = votesByPollId.get(item.id);
+          const itemId = item.id || ''
+          const voteRecord = votesByPollId.get(itemId);
           const expiresAtVal = item.get('expiresAt');
           let expiresAtStr = 'Active';
           if (expiresAtVal) {
@@ -213,7 +215,7 @@ export const dataService = {
           }
 
           return {
-            id: item.id,
+            id: item.id || '',
             title: item.get('title') || 'Untitled Poll',
             category: item.get('category') || 'Community',
             status: item.get('status') || 'voting',
@@ -367,7 +369,7 @@ export const dataService = {
             const selected = v.get('selectedOption') as 'A' | 'B';
             const predicted = v.get('predictedOption') as 'A' | 'B';
             return {
-              id: v.id,
+              id: v.id || '',
               pollId: pollObj ? pollObj.id : '',
               pollTitle,
               category: pollObj ? pollObj.get('category') : 'Daily',
