@@ -14,7 +14,8 @@
     "parse": "8.6.2",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "tailwind-merge": "^3.7.0"
+    "tailwind-merge": "^3.7.0",
+    "vite-plugin-node-polyfills": "^0.28.0"
   },
   "devDependencies": {
     "@types/parse": "^3.0.9",
@@ -26,5 +27,9 @@
     "tailwindcss": "^3.4.19",
     "typescript": "^5.9.3",
     "vite": "^6.4.3"
+  },
+  "allowScripts": {
+    "esbuild": false,
+    "core-js-pure": false
   }
 }
