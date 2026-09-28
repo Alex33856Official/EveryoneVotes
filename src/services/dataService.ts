@@ -199,11 +199,14 @@ export const dataService = {
         query.descending('createdAt');
         const results = await query.find();
 
-        const userVotes = await this.getUserVotes();
-        const votesByPollId = new Map(userVotes.map((v) => [v.pollId, v]));
+        // Read local user vote history synchronously to avoid infinite recursive network calls
+        const historyList: UserVoteRecord[] = JSON.parse(
+          localStorage.getItem(HISTORY_KEY) || '[]'
+        );
+        const votesByPollId = new Map(historyList.map((v) => [v.pollId, v]));
 
         return results.map((item) => {
-          const itemId = item.id || ''
+          const itemId = item.id || '';
           const voteRecord = votesByPollId.get(itemId);
           const expiresAtVal = item.get('expiresAt');
           let expiresAtStr = 'Active';
@@ -215,9 +218,9 @@ export const dataService = {
           }
 
           return {
-            id: item.id || '',
+            id: itemId,
             title: item.get('title') || 'Untitled Poll',
-            category: item.get('category') || 'Community',
+            category: (item.get('category') as Poll['category']) || 'Community',
             status: item.get('status') || 'voting',
             expiresAt: expiresAtStr,
             totalVotes: (item.get('votesCountA') || 0) + (item.get('votesCountB') || 0),
@@ -370,7 +373,7 @@ export const dataService = {
             const predicted = v.get('predictedOption') as 'A' | 'B';
             return {
               id: v.id || '',
-              pollId: pollObj ? pollObj.id : '',
+              pollId: pollObj ? (pollObj.id || '') : '',
               pollTitle,
               category: pollObj ? pollObj.get('category') : 'Daily',
               selectedOption: selected,
@@ -394,28 +397,7 @@ export const dataService = {
       try { return JSON.parse(saved); } catch { /* ignore */ }
     }
 
-    const polls = await this.getPolls();
-    const initialVotes: UserVoteRecord[] = [];
-    polls.forEach((p) => {
-      if (p.userVote && p.userPrediction) {
-        const majority = p.optionA.votes >= p.optionB.votes ? 'A' : 'B';
-        initialVotes.push({
-          id: 'initial-' + p.id,
-          pollId: p.id,
-          pollTitle: p.title,
-          category: p.category,
-          selectedOption: p.userVote,
-          selectedOptionText: p.userVote === 'A' ? p.optionA.text : p.optionB.text,
-          predictedOption: p.userPrediction,
-          predictedOptionText: p.userPrediction === 'A' ? p.optionA.text : p.optionB.text,
-          majorityOption: majority,
-          isPredictionCorrect: p.userPrediction === majority,
-          status: p.status,
-          date: 'Earlier',
-        });
-      }
-    });
-    return initialVotes;
+    return [];
   },
 
   async getSuggestions(): Promise<QuestionSuggestion[]> {
