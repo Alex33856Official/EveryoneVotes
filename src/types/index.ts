@@ -27,6 +27,24 @@ export interface UserProfile {
   color: string;
   correctPredictions: number;
   totalPredictionsCount: number;
+  username?: string;
+  email?: string;
+  isRegistered?: boolean;
+}
+
+export interface UserVoteRecord {
+  id: string;
+  pollId: string;
+  pollTitle: string;
+  category?: string;
+  selectedOption: 'A' | 'B';
+  selectedOptionText: string;
+  predictedOption: 'A' | 'B';
+  predictedOptionText: string;
+  majorityOption?: 'A' | 'B';
+  isPredictionCorrect?: boolean;
+  status: 'voting' | 'closed';
+  date: string;
 }
 
 export interface QuestionSuggestion {

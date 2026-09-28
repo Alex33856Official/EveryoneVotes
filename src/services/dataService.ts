@@ -1,5 +1,5 @@
 import Parse from 'parse';
-import { Poll, QuestionSuggestion, UserProfile } from '../types';
+import { Poll, QuestionSuggestion, UserProfile, UserVoteRecord } from '../types';
 
 const APP_ID = import.meta.env.VITE_BACK4APP_APP_ID;
 const JS_KEY = import.meta.env.VITE_BACK4APP_JS_KEY;
@@ -58,9 +58,31 @@ const DEFAULT_POLLS: Poll[] = [
 
 const STORAGE_KEY = 'everyone_votes_polls_v1';
 const PROFILE_KEY = 'everyone_votes_profile_v1';
+const HISTORY_KEY = 'everyone_votes_user_history_v1';
 
 export const dataService = {
   getProfile(): UserProfile {
+    if (isLiveBackend) {
+      try {
+        const currentUser = Parse.User.current();
+        if (currentUser) {
+          const profile: UserProfile = {
+            id: currentUser.id,
+            username: currentUser.get('username'),
+            nickname: currentUser.get('nickname') || currentUser.get('username'),
+            color: currentUser.get('color') || '#1ea4ec',
+            correctPredictions: currentUser.get('correctPredictions') || 0,
+            totalPredictionsCount: currentUser.get('totalPredictionsCount') || 0,
+            isRegistered: true,
+          };
+          localStorage.setItem(PROFILE_KEY, JSON.stringify(profile));
+          return profile;
+        }
+      } catch {
+        /* ignore */
+      }
+    }
+
     const saved = localStorage.getItem(PROFILE_KEY);
     if (saved) {
       try { return JSON.parse(saved); } catch { /* ignore */ }
@@ -71,6 +93,7 @@ export const dataService = {
       color: '#1ea4ec',
       correctPredictions: 1,
       totalPredictionsCount: 1,
+      isRegistered: false,
     };
     localStorage.setItem(PROFILE_KEY, JSON.stringify(defaultProfile));
     return defaultProfile;
@@ -78,6 +101,93 @@ export const dataService = {
 
   updateProfile(profile: UserProfile): void {
     localStorage.setItem(PROFILE_KEY, JSON.stringify(profile));
+  },
+
+  async signUp(username: string, password: string, nickname?: string, color?: string): Promise<UserProfile> {
+    const current = this.getProfile();
+    const finalNick = nickname?.trim() || username;
+    const finalColor = color || current.color;
+
+    if (isLiveBackend) {
+      const user = new Parse.User();
+      user.set('username', username);
+      user.set('password', password);
+      user.set('nickname', finalNick);
+      user.set('color', finalColor);
+      user.set('correctPredictions', current.correctPredictions);
+      user.set('totalPredictionsCount', current.totalPredictionsCount);
+
+      const createdUser = await user.signUp();
+      const profile: UserProfile = {
+        id: createdUser.id,
+        username: createdUser.get('username'),
+        nickname: createdUser.get('nickname') || finalNick,
+        color: createdUser.get('color') || finalColor,
+        correctPredictions: createdUser.get('correctPredictions') ?? current.correctPredictions,
+        totalPredictionsCount: createdUser.get('totalPredictionsCount') ?? current.totalPredictionsCount,
+        isRegistered: true,
+      };
+      this.updateProfile(profile);
+      return profile;
+    }
+
+    const localProfile: UserProfile = {
+      ...current,
+      id: 'user-' + username.toLowerCase().replace(/\s+/g, '-'),
+      username,
+      nickname: finalNick,
+      color: finalColor,
+      isRegistered: true,
+    };
+    this.updateProfile(localProfile);
+    return localProfile;
+  },
+
+  async logIn(username: string, password: string): Promise<UserProfile> {
+    if (isLiveBackend) {
+      const user = await Parse.User.logIn(username, password);
+      const profile: UserProfile = {
+        id: user.id,
+        username: user.get('username'),
+        nickname: user.get('nickname') || user.get('username'),
+        color: user.get('color') || '#1ea4ec',
+        correctPredictions: user.get('correctPredictions') || 0,
+        totalPredictionsCount: user.get('totalPredictionsCount') || 0,
+        isRegistered: true,
+      };
+      this.updateProfile(profile);
+      return profile;
+    }
+
+    const current = this.getProfile();
+    const localProfile: UserProfile = {
+      ...current,
+      username,
+      nickname: username,
+      isRegistered: true,
+    };
+    this.updateProfile(localProfile);
+    return localProfile;
+  },
+
+  async logOut(): Promise<UserProfile> {
+    if (isLiveBackend) {
+      try {
+        await Parse.User.logOut();
+      } catch (err) {
+        console.warn('Parse logout error:', err);
+      }
+    }
+    const guestProfile: UserProfile = {
+      id: 'local-user-' + Math.random().toString(36).substring(2, 7),
+      nickname: 'Player 1',
+      color: '#1ea4ec',
+      correctPredictions: 0,
+      totalPredictionsCount: 0,
+      isRegistered: false,
+    };
+    this.updateProfile(guestProfile);
+    return guestProfile;
   },
 
   async getPolls(): Promise<Poll[]> {
@@ -146,10 +256,27 @@ export const dataService = {
     const profile = this.getProfile();
     profile.totalPredictionsCount += 1;
     const majority = poll.optionA.votes >= poll.optionB.votes ? 'A' : 'B';
-    if (prediction === majority) {
+    const isCorrect = prediction === majority;
+    if (isCorrect) {
       profile.correctPredictions += 1;
     }
     this.updateProfile(profile);
+
+    // Record locally for immediate history feedback
+    this.recordVoteHistory({
+      id: 'vote-' + Date.now(),
+      pollId: poll.id,
+      pollTitle: poll.title,
+      category: poll.category,
+      selectedOption: choice,
+      selectedOptionText: choice === 'A' ? poll.optionA.text : poll.optionB.text,
+      predictedOption: prediction,
+      predictedOptionText: prediction === 'A' ? poll.optionA.text : poll.optionB.text,
+      majorityOption: majority,
+      isPredictionCorrect: isCorrect,
+      status: poll.status,
+      date: new Date().toLocaleDateString([], { month: 'short', day: 'numeric' }),
+    });
 
     if (isLiveBackend) {
       try {
@@ -164,6 +291,13 @@ export const dataService = {
         const vote = new VoteClass();
         vote.set('poll', pollObj);
         vote.set('voterId', profile.id);
+        const currentUser = Parse.User.current();
+        if (currentUser) {
+          vote.set('user', currentUser);
+          currentUser.set('totalPredictionsCount', profile.totalPredictionsCount);
+          currentUser.set('correctPredictions', profile.correctPredictions);
+          await currentUser.save();
+        }
         vote.set('selectedOption', choice);
         vote.set('predictedOption', prediction);
         await vote.save();
@@ -173,6 +307,94 @@ export const dataService = {
     }
 
     return poll;
+  },
+
+  recordVoteHistory(record: UserVoteRecord): void {
+    const list: UserVoteRecord[] = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]');
+    const existingIdx = list.findIndex((item) => item.pollId === record.pollId);
+    if (existingIdx !== -1) {
+      list[existingIdx] = record;
+    } else {
+      list.unshift(record);
+    }
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(list));
+  },
+
+  async getUserVotes(): Promise<UserVoteRecord[]> {
+    const profile = this.getProfile();
+    if (isLiveBackend) {
+      try {
+        const VoteClass = Parse.Object.extend('Vote');
+        const query = new Parse.Query(VoteClass);
+        const currentUser = Parse.User.current();
+        if (currentUser) {
+          query.equalTo('user', currentUser);
+        } else {
+          query.equalTo('voterId', profile.id);
+        }
+        query.include('poll');
+        query.descending('createdAt');
+        const results = await query.find();
+
+        if (results.length > 0) {
+          return results.map((v) => {
+            const pollObj = v.get('poll');
+            const pollTitle = pollObj ? pollObj.get('title') : 'Channel Broadcast';
+            const optA = pollObj ? pollObj.get('optionA') : 'Option A';
+            const optB = pollObj ? pollObj.get('optionB') : 'Option B';
+            const countA = pollObj ? (pollObj.get('votesCountA') || 0) : 0;
+            const countB = pollObj ? (pollObj.get('votesCountB') || 0) : 0;
+            const majority = countA >= countB ? 'A' : 'B';
+            const selected = v.get('selectedOption') as 'A' | 'B';
+            const predicted = v.get('predictedOption') as 'A' | 'B';
+            return {
+              id: v.id,
+              pollId: pollObj ? pollObj.id : '',
+              pollTitle,
+              category: pollObj ? pollObj.get('category') : 'Daily',
+              selectedOption: selected,
+              selectedOptionText: selected === 'A' ? optA : optB,
+              predictedOption: predicted,
+              predictedOptionText: predicted === 'A' ? optA : optB,
+              majorityOption: majority,
+              isPredictionCorrect: predicted === majority,
+              status: (pollObj?.get('status') as 'voting' | 'closed') || 'voting',
+              date: v.createdAt ? new Date(v.createdAt).toLocaleDateString([], { month: 'short', day: 'numeric' }) : 'Recently',
+            };
+          });
+        }
+      } catch (err) {
+        console.warn('Could not fetch votes from Back4App, checking local storage:', err);
+      }
+    }
+
+    const saved = localStorage.getItem(HISTORY_KEY);
+    if (saved) {
+      try { return JSON.parse(saved); } catch { /* ignore */ }
+    }
+
+    const polls = await this.getPolls();
+    const initialVotes: UserVoteRecord[] = [];
+    polls.forEach((p) => {
+      if (p.userVote && p.userPrediction) {
+        const majority = p.optionA.votes >= p.optionB.votes ? 'A' : 'B';
+        initialVotes.push({
+          id: 'initial-' + p.id,
+          pollId: p.id,
+          pollTitle: p.title,
+          category: p.category,
+          selectedOption: p.userVote,
+          selectedOptionText: p.userVote === 'A' ? p.optionA.text : p.optionB.text,
+          predictedOption: p.userPrediction,
+          predictedOptionText: p.userPrediction === 'A' ? p.optionA.text : p.optionB.text,
+          majorityOption: majority,
+          isPredictionCorrect: p.userPrediction === majority,
+          status: p.status,
+          date: 'Earlier',
+        });
+      }
+    });
+    return initialVotes;
   },
 
   async submitSuggestion(suggestion: QuestionSuggestion): Promise<void> {

@@ -115,7 +115,15 @@ export const Header: React.FC<HeaderProps> = ({
             <User className="w-4 h-4" />
           </div>
           <div className="hidden sm:block text-xs">
-            <div className="font-bold text-slate-800">{profile.nickname}</div>
+            <div className="font-bold text-slate-800 flex items-center gap-1.5">
+              {profile.nickname}
+              {profile.isRegistered && (
+                <span
+                  className="w-2 h-2 rounded-full bg-emerald-500 inline-block ring-2 ring-emerald-200"
+                  title="Back4App Account Active"
+                />
+              )}
+            </div>
             <div className="text-[10px] text-slate-500">
               Intuition: <span className="font-bold text-wii-blue">{intuitionPercent}%</span>
             </div>

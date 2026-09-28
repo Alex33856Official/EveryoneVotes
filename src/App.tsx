@@ -5,6 +5,7 @@ import { sounds } from './services/soundService';
 import { Header } from './components/Header';
 import { PollModal } from './components/PollModal';
 import { SuggestionModal } from './components/SuggestionModal';
+import { ProfileModal } from './components/ProfileModal';
 import { CheckCircle2, ChevronRight, BarChart3, HelpCircle } from 'lucide-react';
 
 export const App: React.FC = () => {
@@ -13,6 +14,7 @@ export const App: React.FC = () => {
   const [selectedPoll, setSelectedPoll] = useState<Poll | null>(null);
   const [filter, setFilter] = useState<'ALL' | 'VOTING' | 'CLOSED'>('ALL');
   const [isSuggestOpen, setIsSuggestOpen] = useState(false);
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
 
   useEffect(() => {
     dataService.getPolls().then(setPolls);
@@ -36,7 +38,7 @@ export const App: React.FC = () => {
       {/* Top Header */}
       <Header
         profile={profile}
-        onOpenProfile={() => {}}
+        onOpenProfile={() => setIsProfileOpen(true)}
         onOpenSuggest={() => setIsSuggestOpen(true)}
         isBackendLive={isLiveBackend}
       />
@@ -156,6 +158,14 @@ export const App: React.FC = () => {
       )}
 
       {isSuggestOpen && <SuggestionModal onClose={() => setIsSuggestOpen(false)} />}
+
+      {isProfileOpen && (
+        <ProfileModal
+          profile={profile}
+          onClose={() => setIsProfileOpen(false)}
+          onProfileUpdated={(updated) => setProfile(updated)}
+        />
+      )}
     </div>
   );
 };
