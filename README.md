@@ -1,6 +1,8 @@
 # Everyone Votes
 
 A simple clone of the [Everybody Votes Channel](https://nintendo.fandom.com/wiki/Everybody_Votes_Channel)  [\(Video\)](https://www.youtube.com/watch?v=mkX80a9Uj4g) from the Nintendo Wii to test the use of AI tools.
+* Deployed URL: [https://delightful-nasturtium-aedb7b.netlify.app/](https://delightful-nasturtium-aedb7b.netlify.app/)
+* YouTube Video Link: [https://youtu.be/_3adB6wI0zE](https://youtu.be/_3adB6wI0zE)
 
 ## Functionality
 Users can:
